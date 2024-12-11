@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WASTE SORTING GAME</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+  </head>
+  <body>
+    <style>
+      @font-face {
+        font-family: "Tiny5";
+        src: url("./assets/fonts/Tiny-5-Regular.ttf") format("truetype");
+        font-weight: normal;
+        font-style: "Tiny5";
+      }
+
+      body {
+        font-family: "Tiny5";
+        margin: 0;
+        background-color: black;
+        cursor: url("assets/hand_cursor.png"), auto;
+      }
+
+      #renderDiv {
+        height: 100vh;
+      }
+
+      #fullscreenButton {
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        z-index: 100;
+        cursor: pointer;
+        width: 50px;
+        height: 50px;
+      }
+    </style>
+
+    <div id="renderDiv"></div>
+
+    <img
+      id="fullscreenButton"
+      src="assets/fullscreen_on.png"
+      alt="Fullscreen Button"
+    />
+
+    <script src="game.js"></script>
+    <script>
+      document
+        .getElementById("fullscreenButton")
+        .addEventListener("click", () => {
+          const gameInstance = window.phaserGame;
+          if (gameInstance.scale.isFullscreen) {
+            gameInstance.scale.stopFullscreen();
+          } else {
+            gameInstance.scale.startFullscreen();
+          }
+        });
+    </script>
+  </body>
+</html>

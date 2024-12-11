@@ -1,0 +1,782 @@
+class MainMenu extends Phaser.Scene {
+  constructor() {
+    super({ key: "MainMenu" });
+    this.assetsLoaded = false;
+  }
+
+  preload() {
+    console.log("MainMenu: Loading assets...");
+
+    // Add loading progress bar
+    const progressBar = this.add.graphics();
+    const progressBox = this.add.graphics();
+    const width = this.cameras.main.width;
+    const height = this.cameras.main.height;
+
+    progressBox.fillStyle(0x222222, 0.8);
+    progressBox.fillRect(width / 4, height / 2 - 30, width / 2, 50);
+
+    // Loading progress event
+    this.load.on("progress", (value) => {
+      progressBar.clear();
+      progressBar.fillStyle(0xffffff, 1);
+      progressBar.fillRect(
+        width / 4 + 10,
+        height / 2 - 20,
+        (width / 2 - 20) * value,
+        30
+      );
+    });
+
+    this.load.on("complete", () => {
+      progressBar.destroy();
+      progressBox.destroy();
+      this.assetsLoaded = true;
+      console.log("MainMenu: All assets loaded");
+    });
+
+    // Load assets
+    this.load.image("menuBackground", "assets/orchard.png");
+    this.load.image("playButton", "assets/play_button.png");
+    this.load.image("exitButton", "assets/Exit_button.png");
+    this.load.image("text_title", "assets/text.png");
+    this.load.audio("background_music", "assets/back_sound.mp3");
+  }
+
+  create() {
+    console.log("MainMenu: Scene created");
+    const { width, height } = this.scale;
+
+    const background = this.add.image(width / 2, height / 2, "menuBackground");
+    background.setDisplaySize(width, height);
+
+    const titleText = this.add
+      .image(width / 2, height / 2 - 100, "text_title")
+      .setDisplaySize(250, 100);
+
+    const playButton = this.add
+      .image(width / 2, height / 2 + 150, "playButton")
+      .setInteractive()
+      .setDisplaySize(250, 100);
+
+    playButton.on("pointerdown", () => {
+      if (this.assetsLoaded) {
+        console.log("MainMenu: Starting Example scene");
+        this.scene.start("Example");
+      } else {
+        console.warn("MainMenu: Assets not fully loaded yet");
+      }
+    });
+
+    const exitButton = this.add
+      .image(width / 2, height / 2 + 250, "exitButton")
+      .setInteractive()
+      .setDisplaySize(250, 100);
+
+    exitButton.on("pointerdown", () => {
+      console.log("MainMenu: Exit clicked");
+      window.close();
+    });
+  }
+}
+
+class Example extends Phaser.Scene {
+  constructor() {
+    super({ key: "Example" });
+    this.level = 1;
+    this.score = 0;
+    this.timeRemaining = 30;
+    this.baseDropSpeed = 150;
+    this.anorganikWaste = [];
+    this.organikWaste = [];
+    this.b3Waste = [];
+
+    // Define target scores for each level
+    this.levelTargets = {
+      1: 100,
+      2: 200,
+      3: 250,
+      4: 300,
+      5: 350,
+    };
+  }
+
+  preload() {
+    // Loading screen
+    const width = this.cameras.main.width;
+    const height = this.cameras.main.height;
+
+    const progressBar = this.add.graphics();
+    const progressBox = this.add.graphics();
+    progressBox.fillStyle(0x222222, 0.8);
+    progressBox.fillRect(width / 4, height / 2 - 30, width / 2, 50);
+
+    // Loading progress event
+    this.load.on("progress", (value) => {
+      progressBar.clear();
+      progressBar.fillStyle(0xffffff, 1);
+      progressBar.fillRect(
+        width / 4 + 10,
+        height / 2 - 20,
+        (width / 2 - 20) * value,
+        30
+      );
+    });
+
+    this.load.on("complete", () => {
+      progressBar.destroy();
+      progressBox.destroy();
+    });
+
+    // Load with error handling
+    try {
+      // Load assets with full paths
+      const assetPath = "assets/";
+
+      // Anorganik waste
+      this.load.image("anorganik1", `${assetPath}anorganik1.png`);
+      this.load.image("anorganik2", `${assetPath}anorganik2.png`);
+      this.load.image("anorganik3", `${assetPath}anorganik3.png`);
+
+      // Organik waste
+      this.load.image("organik1", `${assetPath}organik1.png`);
+      this.load.image("organik2", `${assetPath}organik2.png`);
+      this.load.image("organik3", `${assetPath}organik3.png`);
+
+      // B3 waste
+      this.load.image("b3_1", `${assetPath}b3_1.png`);
+      this.load.image("b3_2", `${assetPath}b3_2.png`);
+      this.load.image("b3_3", `${assetPath}b3_3.png`);
+
+      // Bins
+      this.load.image("anorganik_bin", `${assetPath}anorganik.png`);
+      this.load.image("organik_bin", `${assetPath}organik.png`);
+      this.load.image("b3_bin", `${assetPath}B3.png`);
+
+      // Background and music
+      this.load.image("game_background", `${assetPath}game_background.jpg`);
+      this.load.audio("background_music", `${assetPath}music.mp3`);
+    } catch (error) {
+      console.error("Error loading assets:", error);
+    }
+  }
+
+  create() {
+    // Verify assets loaded
+    if (!this.textures.exists("game_background")) {
+      console.error("Required assets not loaded");
+      this.add
+        .text(
+          this.scale.width / 2,
+          this.scale.height / 2,
+          "Error loading game assets",
+          {
+            fontSize: "24px",
+            fill: "#fff",
+          }
+        )
+        .setOrigin(0.5);
+      return;
+    }
+
+    // Continue with normal scene creation
+    const { width, height } = this.scale;
+    this.createBackground(width, height);
+    this.timeRemaining = 60;
+    this.targetScore = 100;
+    this.createDustbins();
+    this.createWasteItems();
+    this.createTimer();
+    this.createScoreText();
+    this.createLevelText();
+    this.createTargetScoreText();
+    // Add background music with error handling
+    try {
+      this.backgroundMusic = this.sound.add("background_music", {
+        loop: true,
+        volume: 0.1,
+      });
+      this.backgroundMusic.play();
+      this.sound.pauseOnBlur = false;
+    } catch (error) {
+      console.warn("Background music failed to load:", error);
+    }
+  }
+
+  createBackground(width, height) {
+    const background = this.add.image(width / 2, height / 2, "game_background");
+    const scaleX = width / background.width;
+    const scaleY = height / background.height;
+    const scale = Math.max(scaleX, scaleY);
+    background.setScale(scale); // Menyesuaikan agar background memenuhi layar
+  }
+
+  createDustbins() {
+    const { width, height } = this.scale;
+    const binWidth = 100;
+    const binHeight = 150;
+
+    this.dustbins = {
+      anorganik: this.add
+        .image(width * 0.2, height - 100, "anorganik_bin")
+        .setDisplaySize(binWidth, binHeight)
+        .setInteractive(),
+      organik: this.add
+        .image(width * 0.5, height - 100, "organik_bin")
+        .setDisplaySize(binWidth, binHeight)
+        .setInteractive(),
+      b3: this.add
+        .image(width * 0.8, height - 100, "b3_bin")
+        .setDisplaySize(binWidth, binHeight)
+        .setInteractive(),
+    };
+
+    // Add labels to bins
+    const binLabels = {
+      anorganik: "Anorganik",
+      organik: "Organik",
+      b3: "B3",
+    };
+
+    Object.keys(this.dustbins).forEach((type) => {
+      this.add
+        .text(
+          this.dustbins[type].x,
+          this.dustbins[type].y + binHeight / 2 + 20,
+          binLabels[type],
+          {
+            fontSize: "16px",
+            fill: "#fff",
+          }
+        )
+        .setOrigin(0.5);
+    });
+  }
+
+  createWasteItems() {
+    const { width } = this.scale;
+
+    // Define waste types with their corresponding images and categories
+    const wasteTypes = [
+      { key: "anorganik1", type: "anorganik" },
+      { key: "anorganik2", type: "anorganik" },
+      { key: "anorganik3", type: "anorganik" },
+      { key: "organik1", type: "organik" },
+      { key: "organik2", type: "organik" },
+      { key: "organik3", type: "organik" },
+      { key: "b3_1", type: "b3" },
+      { key: "b3_2", type: "b3" },
+      { key: "b3_3", type: "b3" },
+    ];
+
+    // Clear existing waste arrays
+    this.anorganikWaste = [];
+    this.organikWaste = [];
+    this.b3Waste = [];
+    this.wasteItems = [];
+
+    const wasteSize = {
+      width: 80,
+      height: 80,
+    };
+
+    // Create waste items
+    for (let i = 0; i < 30; i++) {
+      const randomWaste =
+        wasteTypes[Math.floor(Math.random() * wasteTypes.length)];
+      const x = Phaser.Math.Between(50, width - 50);
+
+      const waste = this.physics.add.image(x, -50, randomWaste.key);
+
+      // Calculate scale to achieve consistent size
+      waste.setDisplaySize(wasteSize.width, wasteSize.height);
+
+      waste.setBounce(0.2);
+      waste.setCollideWorldBounds(true);
+      waste.setData("type", randomWaste.type);
+      waste.setVisible(false);
+
+      // Store waste in appropriate array
+      switch (randomWaste.type) {
+        case "anorganik":
+          this.anorganikWaste.push(waste);
+          break;
+        case "organik":
+          this.organikWaste.push(waste);
+          break;
+        case "b3":
+          this.b3Waste.push(waste);
+          break;
+      }
+
+      this.wasteItems.push(waste);
+      this.setupDragEvents(waste);
+    }
+
+    // Drop items periodically
+    this.time.addEvent({
+      delay: 1000,
+      callback: this.dropNextItem,
+      callbackScope: this,
+      loop: true,
+    });
+  }
+
+  dropNextItem() {
+    if (this.wasteItems.length > 0) {
+      const waste = this.wasteItems.shift();
+      waste.setVisible(true);
+      waste.setPosition(waste.x, 0);
+      waste.setVelocityY(this.baseDropSpeed + (this.level - 1) * 20); // Misalnya, bertambah 20 per level
+
+      console.log("Sampah jatuh ke Y:", waste.y);
+      // Cek apakah sampah sudah jatuh ke tanah (misalnya, mencapai bagian bawah layar)
+      waste.once("worldbounds", () => {
+        if (waste.y >= this.scale.height - 100) {
+          // Jika sampah sudah berada di bagian bawah
+          waste.destroy(); // Menghapus sampah dari dunia
+        }
+      });
+    }
+  }
+
+  setupDragEvents(waste) {
+    waste.setInteractive();
+    this.input.setDraggable(waste);
+    waste.on("dragstart", (pointer) => {
+      waste.body.setVelocity(0);
+      waste.input.dragStartX = waste.x;
+      waste.input.dragStartY = waste.y;
+    });
+    waste.on("drag", (pointer, dragX, dragY) => {
+      waste.x = dragX;
+      waste.y = dragY;
+    });
+    waste.on("dragend", () => {
+      this.checkWasteCollection(waste);
+
+      // Cek apakah sampah berada di bawah layar dan tidak di tempat sampah
+      if (waste.y >= this.scale.height - 100) {
+        waste.destroy(); // Hapus sampah jika sudah jatuh ke bawah layar
+      }
+    });
+  }
+
+  showLevelTransition() {
+    // Pause game sementara
+
+    // Buat overlay hitam transparan
+    const overlay = this.add.rectangle(
+      0,
+      0,
+      this.scale.width,
+      this.scale.height,
+      0x000000,
+      0.7
+    );
+    overlay.setOrigin(0, 0);
+    overlay.setDepth(100);
+
+    // Teks level complete
+    const completeText = this.add.text(
+      this.scale.width / 2,
+      this.scale.height / 2 - 50,
+      `Level ${this.level - 1} Complete!`,
+      {
+        fontSize: "32px",
+        fill: "#fff",
+        align: "center",
+        stroke: "#000000",
+        strokeThickness: 6,
+      }
+    );
+    completeText.setOrigin(0.5);
+    completeText.setDepth(100);
+
+    // Teks score
+    const scoreText = this.add.text(
+      this.scale.width / 2,
+      this.scale.height / 2 + 20,
+      `Score: ${this.score}`,
+      {
+        fontSize: "32px",
+        fill: "#fff",
+        align: "center",
+        stroke: "#000000",
+        strokeThickness: 4,
+      }
+    );
+    scoreText.setOrigin(0.5);
+    scoreText.setDepth(100);
+
+    // Tombol continue
+    const continueButton = this.add.rectangle(
+      this.scale.width / 2,
+      this.scale.height / 2 + 100,
+      200,
+      50,
+      0x00ff00
+    );
+    continueButton.setDepth(100);
+    continueButton.setInteractive();
+
+    const buttonText = this.add.text(
+      this.scale.width / 2,
+      this.scale.height / 2 + 100,
+      "Continue",
+      {
+        fontSize: "24px",
+        fill: "#000",
+        align: "center",
+      }
+    );
+
+    buttonText.setOrigin(0.5);
+    buttonText.setDepth(100);
+    buttonText.setInteractive();
+    // Animasi sederhana untuk tombol
+    this.tweens.add({
+      targets: continueButton,
+      scaleX: 1.1,
+      scaleY: 1.1,
+      yoyo: true,
+      repeat: -1,
+      duration: 1000,
+    });
+
+    // Event handler untuk tombol continue
+    continueButton.on("pointerup", () => {
+      // Hapus semua elemen transisi
+      console.log("Continue button clicked!");
+      overlay.destroy();
+      completeText.destroy();
+      scoreText.destroy();
+      continueButton.destroy();
+      buttonText.destroy();
+
+      // Resume game dan mulai level baru
+      this.scene.resume();
+      this.startNewLevel();
+    });
+  }
+
+  endLevel() {
+    this.level++; // Meningkatkan level setelah selesai
+    if (this.level > 5) {
+      // Jika level lebih dari 5, game selesai
+      this.gameOver();
+    } else {
+      if (this.backgroundMusic) {
+        this.backgroundMusic.stop();
+      }
+
+      // Pause scene sebelum transisi level
+      this.scene.pause();
+
+      // Verifikasi dengan benar sebelum melanjutkan ke scene transisi level
+      this.scene.launch("LevelTransition", {
+        level: this.level - 1, // Menampilkan level sebelumnya karena level sudah bertambah
+        score: this.score, // Kirim score sebelumnya
+      });
+    }
+  }
+
+  startNewLevel() {
+    this.timeRemaining = Math.max(30, 60 - (this.level - 1) * 5);
+    this.targetScore = this.levelTargets[this.level];
+    this.baseDropSpeed += 20; // meningkatkan kecepatan setiap level
+    this.score = 0; // Reset score to 0 at the beginning of each new level
+    this.levelText.setText("Level: " + this.level);
+    this.scoreText.setText("Score: " + this.score);
+    this.targetScoreText.setText("Target: " + this.targetScore);
+    this.createWasteItems(); // Create new waste items for the next level
+  }
+
+  checkWasteCollection(waste) {
+    const wasteType = waste.getData("type");
+    let isCorrect = false;
+
+    for (let dustbinType in this.dustbins) {
+      if (
+        Phaser.Geom.Intersects.RectangleToRectangle(
+          waste.getBounds(),
+          this.dustbins[dustbinType].getBounds()
+        )
+      ) {
+        if (dustbinType === wasteType) {
+          // Jika benar, tambah poin 10
+          const points = 10;
+          this.score += points;
+          isCorrect = true;
+          this.showFeedback(`Correct! +${points}`, "#00ff00");
+        } else {
+          // Jika salah, kurangi poin 5
+          const penalty = 5;
+          this.score = Math.max(0, this.score - penalty); // Tidak membiarkan skor menjadi negatif
+          this.showFeedback(`Wrong bin! -${penalty}`, "#ff0000");
+        }
+
+        this.scoreText.setText("Score: " + this.score);
+        waste.destroy();
+
+        const wasteArrayName = `${wasteType}Waste`;
+        if (this[wasteArrayName] && Array.isArray(this[wasteArrayName])) {
+          const index = this[wasteArrayName].indexOf(waste);
+          if (index > -1) {
+            this[wasteArrayName].splice(index, 1);
+          }
+        }
+
+        // **Check if reached level target**
+        if (this.score >= this.levelTargets[this.level]) {
+          console.log("Target score reached! Level transitioning...");
+          this.endLevel(); // Trigger level transition when score reaches target
+        }
+        return;
+      }
+    }
+
+    // Kembalikan sampah ke posisi awal jika tidak tepat
+    if (!isCorrect) {
+      waste.x = waste.input.dragStartX;
+      waste.y = waste.input.dragStartY;
+    }
+  }
+
+  createTargetScoreText() {
+    this.targetScoreText = this.add.text(
+      16,
+      118,
+      "Target: " + this.levelTargets[this.level],
+      {
+        fontSize: "32px",
+        fill: "#000",
+      }
+    );
+  }
+
+  showFeedback(message, color) {
+    const feedbackText = this.add
+      .text(this.scale.width / 2, this.scale.height / 2, message, {
+        fontSize: "32px",
+        fill: color,
+        stroke: "#000000",
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5);
+
+    this.tweens.add({
+      targets: feedbackText,
+      y: feedbackText.y - 50,
+      alpha: 0,
+      duration: 1000,
+      ease: "Power2",
+      onComplete: () => {
+        feedbackText.destroy();
+      },
+    });
+  }
+
+  createTimer() {
+    this.timerText = this.add.text(16, 16, "Time: 60", {
+      fontSize: "32px",
+      fill: "#000",
+    });
+    this.time.addEvent({
+      delay: 1000,
+      callback: this.updateTimer,
+      callbackScope: this,
+      loop: true,
+    });
+  }
+
+  updateTimer() {
+    this.timeRemaining--;
+    this.timerText.setText("Time: " + this.timeRemaining);
+    if (this.timeRemaining <= 0) {
+      this.endLevel();
+    }
+  }
+
+  createScoreText() {
+    this.scoreText = this.add.text(16, 50, "Score: 0", {
+      fontSize: "32px",
+      fill: "#000",
+    });
+  }
+
+  createLevelText() {
+    this.levelText = this.add.text(16, 84, "Level: " + this.level, {
+      fontSize: "32px",
+      fill: "#000",
+    });
+  }
+
+  createTargetScoreText() {
+    this.targetScoreText = this.add.text(
+      16,
+      118,
+      "Target: " + this.targetScore,
+      {
+        fontSize: "32px",
+        fill: "#000",
+      }
+    );
+  }
+
+  gameOver() {
+    if (this.backgroundMusic) {
+      this.backgroundMusic.stop();
+    }
+    this.scene.pause();
+
+    // Create game over overlay
+    const overlay = this.add.rectangle(
+      0,
+      0,
+      this.scale.width,
+      this.scale.height,
+      0x000000,
+      0.7
+    );
+    overlay.setOrigin(0);
+    overlay.setDepth(100);
+
+    // Game over text with max level reached
+    const gameOverText = this.add
+      .text(
+        this.scale.width / 2,
+        this.scale.height / 2 - 50,
+        `Game Over!\nYou reached Level ${this.level}\nFinal Score: ${this.score}`,
+        {
+          fontSize: "32px",
+          fill: "#fff",
+          align: "center",
+          stroke: "#000000",
+          strokeThickness: 6,
+        }
+      )
+      .setOrigin(0.5)
+      .setDepth(100);
+
+    // Add restart button
+    const restartBtn = this.add
+      .rectangle(
+        this.scale.width / 2,
+        this.scale.height / 2 + 100,
+        200,
+        50,
+        0x00ff00
+      )
+      .setInteractive()
+      .setDepth(100);
+
+    const restartText = this.add
+      .text(this.scale.width / 2, this.scale.height / 2 + 100, "Restart Game", {
+        fontSize: "24px",
+        fill: "#000",
+        align: "center",
+      })
+      .setOrigin(0.5)
+      .setDepth(100);
+
+    restartBtn.on("pointerup", () => {
+      this.scene.start("MainMenu");
+    });
+  }
+}
+
+class LevelTransition extends Phaser.Scene {
+  constructor() {
+    super({ key: "LevelTransition" });
+  }
+
+  init(data) {
+    if (data) {
+      this.level = data.level || 1; // Dapatkan level dari data yang dikirim
+      this.score = data.score || 0; // Dapatkan score dari data yang dikirim
+    }
+  }
+
+  create() {
+    const { width, height } = this.scale;
+
+    // Background overlay
+    this.add.rectangle(0, 0, width, height, 0x000000, 0.7).setOrigin(0);
+
+    // Level complete text
+    this.add
+      .text(width / 2, height / 2 - 100, `Level ${this.level} Complete!`, {
+        fontSize: "32px",
+        fill: "#fff",
+        align: "center",
+        stroke: "#000000",
+        strokeThickness: 6,
+      })
+      .setOrigin(0.5);
+
+    this.add
+      .text(width / 2, height / 2, `Score: ${this.score}`, {
+        fontSize: "28px",
+        fill: "#fff",
+        stroke: "#000000",
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5);
+
+    // Continue button with better styling
+    const continueBtn = this.add
+      .rectangle(width / 2, height / 2 + 100, 200, 50, 0x00ff00)
+      .setInteractive()
+      .setOrigin(0.5);
+
+    const btnText = this.add
+      .text(
+        width / 2,
+        height / 2 + 100,
+        "Continue to Level " + (this.level + 1),
+        {
+          fontSize: "20px",
+          fill: "#000",
+        }
+      )
+      .setOrigin(0.5);
+    // Add hover effect
+    continueBtn.on("pointerover", () => {
+      continueBtn.setScale(1.1);
+    });
+    continueBtn.on("pointerout", () => {
+      continueBtn.setScale(1);
+    });
+
+    continueBtn.on("pointerup", () => {
+      this.scene.start("Example", {
+        level: this.level + 1, // Start the next level
+        score: 0, // Reset score to 0 for new level
+      });
+    });
+  }
+}
+
+// Konfigurasi Phaser dengan menambahkan MainMenu sebagai scene pertama
+const config = {
+  type: Phaser.AUTO,
+  parent: "renderDiv",
+  pixelArt: true,
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+    width: 360,
+    height: 640,
+  },
+  physics: {
+    default: "arcade",
+    arcade: {
+      gravity: { y: 200 },
+      debug: false,
+    },
+  },
+  scene: [MainMenu, Example, LevelTransition], // Pastikan scene MainMenu dan Example ada di sini
+};
+
+window.phaserGame = new Phaser.Game(config);
